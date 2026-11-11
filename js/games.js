@@ -1,5 +1,5 @@
-import { h, shuffle, pick, sample } from './ui.js?v=6';
-import { WORD_SETS } from './words.js?v=6';
+import { h, shuffle, pick, sample } from './ui.js?v=7';
+import { WORD_SETS } from './words.js?v=7';
 
 // Каждая игра: start(root, finish), где finish({ score, total, ... }) вызывается в конце.
 // group: 'left' — задания из программы (левое полушарие), 'focus' — внимание, скорость, память.
@@ -286,10 +286,10 @@ function mirrorRound() {
 }
 
 const SHAPES = [
-  { id: 'circle', gen: 'круга', color: '#e8833a' },
-  { id: 'square', gen: 'квадрата', color: '#0f766e' },
-  { id: 'triangle', gen: 'треугольника', color: '#8e24aa' },
-  { id: 'star', gen: 'звезды', color: '#d64545' },
+  { id: 'circle', gen: 'круга', ins: 'кругом', color: '#e8833a' },
+  { id: 'square', gen: 'квадрата', ins: 'квадратом', color: '#0f766e' },
+  { id: 'triangle', gen: 'треугольника', ins: 'треугольником', color: '#8e24aa' },
+  { id: 'star', gen: 'звезды', ins: 'звездой', color: '#d64545' },
 ];
 
 function shapeEl(id, cx, cy, r, color) {
@@ -324,14 +324,14 @@ function positionRound() {
       // остальные фигуры — не в том же ряду (или столбце), что и первая
       const free = shuffle([...Array(9).keys()].map((k) => [k % 3, Math.floor(k / 3)])
         .filter(([x, y]) => (dx ? y !== ay : x !== ax)));
-      layout = { label, a, b, others: [c, d], cells: [[a, ax, ay], [b, bx, by], [c, ...free[0]], [d, ...free[1]]] };
+      layout = { label, dy, a, b, others: [c, d], cells: [[a, ax, ay], [b, bx, by], [c, ...free[0]], [d, ...free[1]]] };
       break;
     }
     const visual = h('svg', { viewBox: '0 0 300 300', class: 'board' },
       h('rect', { x: 2, y: 2, width: 296, height: 296, rx: 14, fill: 'var(--card)', stroke: 'var(--line)', 'stroke-width': 3 }),
       layout.cells.map(([s, x, y]) => shapeEl(s.id, 50 + x * 100, 50 + y * 100, 30, s.color)));
     choiceRound(area, {
-      prompt: `Что находится ${layout.label} ${layout.a.gen}?`,
+      prompt: `Что находится ${layout.label} ${layout.dy ? layout.a.ins : layout.a.gen}?`,
       secs: 15,
       visual,
       optionsClass: 'options grid3',
