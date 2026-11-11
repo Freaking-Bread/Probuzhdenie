@@ -1,8 +1,8 @@
-import { h, fmtMin } from './ui.js?v=8';
-import * as store from './store.js?v=8';
-import { EXERCISES, BRAIN_VIDEOS, MUSIC, DAILY_GOALS } from './content.js?v=8';
-import { GAMES, stopGame } from './games.js?v=8';
-import { createPlayer, startVoiceRecording } from './player.js?v=8';
+import { h, fmtMin } from './ui.js?v=9';
+import * as store from './store.js?v=9';
+import { EXERCISES, BRAIN_VIDEOS, MUSIC, DAILY_GOALS } from './content.js?v=9';
+import { GAMES, stopGame } from './games.js?v=9';
+import { createPlayer, startVoiceRecording } from './player.js?v=9';
 
 const app = document.getElementById('app');
 let cleanup = null; // вызывается при уходе с экрана
@@ -67,7 +67,7 @@ function loginScreen() {
     render();
   };
   app.replaceChildren(h('main', { class: 'login' },
-    h('img', { class: 'logo', src: 'icons/icon-192.png?v=8', alt: '' }),
+    h('img', { class: 'logo', src: 'icons/icon-192.png?v=9', alt: '' }),
     h('h1', {}, 'Пробуждение'),
     h('form', { onsubmit: submit },
       input,
@@ -401,6 +401,7 @@ function exportCsv(users, events) {
 
 store.setDescriber((e) => ({ text: describe(e), section: refTitle(e) }));
 window.addEventListener('online', () => store.flush());
+document.addEventListener('visibilitychange', () => store.flush());
 store.flush();
 
 window.addEventListener('hashchange', render);

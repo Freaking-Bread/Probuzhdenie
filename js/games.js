@@ -1,5 +1,5 @@
-import { h, shuffle, pick, sample } from './ui.js?v=8';
-import { WORD_SETS } from './words.js?v=8';
+import { h, shuffle, pick, sample } from './ui.js?v=9';
+import { WORD_SETS } from './words.js?v=9';
 
 // Каждая игра: start(root, finish), где finish({ score, total, ... }) вызывается в конце.
 // group: 'left' — задания из программы (левое полушарие), 'focus' — внимание, скорость, память.

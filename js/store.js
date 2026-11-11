@@ -2,7 +2,7 @@
 // Всё сначала записывается на устройстве (чтобы работать и без интернета), а затем
 // отправляется на сервер (Google-таблица + Диск), если в content.js указан API_URL.
 
-import { API_URL } from './content.js?v=8';
+import { API_URL } from './content.js?v=9';
 
 const K_USERS = 'med.users';
 const K_EVENTS = 'med.events';
@@ -81,8 +81,10 @@ export async function listEvents(userId) {
 
 // Отправляет на сервер всё, что ещё не отправлено. Безопасно вызывать сколько угодно раз.
 let flushing = false;
+let flushAgain = false;
 export async function flush() {
-  if (!API_URL || flushing) return;
+  if (!API_URL) return;
+  if (flushing) { flushAgain = true; return; } // дошлём сразу после текущей отправки
   flushing = true;
   try {
     const users = read(K_USERS, []);
@@ -105,6 +107,7 @@ export async function flush() {
     console.warn('Не удалось отправить данные, попробуем позже', e);
   } finally {
     flushing = false;
+    if (flushAgain) { flushAgain = false; flush(); }
   }
 }
 
