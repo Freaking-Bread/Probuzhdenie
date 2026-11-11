@@ -1,8 +1,8 @@
-import { h, fmtMin } from './ui.js?v=7';
-import * as store from './store.js?v=7';
-import { EXERCISES, BRAIN_VIDEOS, MUSIC, DAILY_GOALS, COORDINATOR_PIN } from './content.js?v=7';
-import { GAMES, stopGame } from './games.js?v=7';
-import { createPlayer, startVoiceRecording } from './player.js?v=7';
+import { h, fmtMin } from './ui.js?v=8';
+import * as store from './store.js?v=8';
+import { EXERCISES, BRAIN_VIDEOS, MUSIC, DAILY_GOALS } from './content.js?v=8';
+import { GAMES, stopGame } from './games.js?v=8';
+import { createPlayer, startVoiceRecording } from './player.js?v=8';
 
 const app = document.getElementById('app');
 let cleanup = null; // вызывается при уходе с экрана
@@ -42,9 +42,9 @@ function screen(title, back, ...content) {
   );
 }
 
-async function todayStats(userId) {
+async function todayStats(userId, all) {
   const today = store.dayKey();
-  const ev = (await store.listEvents(userId)).filter((e) => e.day === today);
+  const ev = (all || await store.listEvents(userId)).filter((e) => e.userId === userId && e.day === today);
   const done = (type) => ev.filter((e) => e.type === type);
   return {
     exerciseDone: new Set(done('exercise_done').map((e) => e.ref)),
@@ -67,7 +67,7 @@ function loginScreen() {
     render();
   };
   app.replaceChildren(h('main', { class: 'login' },
-    h('img', { class: 'logo', src: 'icons/icon-192.png?v=7', alt: '' }),
+    h('img', { class: 'logo', src: 'icons/icon-192.png?v=8', alt: '' }),
     h('h1', {}, 'Пробуждение'),
     h('form', { onsubmit: submit },
       input,
@@ -109,6 +109,11 @@ async function exercisesScreen() {
       h('span', { class: 'card-sub' }, s.exerciseDone.has(ex.id) ? '✓ выполнено' : `${ex.minutes} мин`))));
 }
 
+// Имя файла на Диске: дата, пациент, к чему относится
+function fileName(title, ext) {
+  return `${store.dayKey()} ${store.currentUser().name} — ${title}.${ext || 'webm'}`;
+}
+
 function exerciseScreen(id) {
   const backTo = BRAIN_VIDEOS.some((x) => x.id === id) ? '/cognitive' : '/exercises';
   const ex = [...EXERCISES, ...BRAIN_VIDEOS].find((x) => x.id === id);
@@ -137,8 +142,11 @@ function exerciseScreen(id) {
       if (!file) return;
       note.textContent = 'Отправляем видео…';
       try {
-        const fileId = await store.saveFile(file);
-        await store.log('exercise_video', ex.id, { fileId, size: file.size, name: file.name });
+        const saved = await store.saveFile(file, {
+          name: fileName(ex.title, file.name.split('.').pop()),
+          onProgress: (p) => { note.textContent = `Отправляем видео… ${Math.round(p * 100)}%`; },
+        });
+        await store.log('exercise_video', ex.id, { ...saved, size: file.size });
         note.textContent = '✓ Видео отправлено';
       } catch (e) {
         console.error(e);
@@ -248,8 +256,14 @@ function musicScreen(id, back = '/music') {
       recBtn.textContent = '🎤 Записать, как я пою';
       recBtn.classList.remove('recording');
       const blob = await rec.stop();
-      const fileId = await store.saveFile(blob);
-      await sung({ fileId });
+      note.textContent = 'Отправляем запись…';
+      try {
+        const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm';
+        await sung(await store.saveFile(blob, { name: fileName('пение, ' + m.title, ext) }));
+      } catch (e) {
+        console.error(e);
+        note.textContent = 'Не получилось отправить запись. Попробуйте ещё раз.';
+      }
     },
   }, '🎤 Записать, как я пою');
 
@@ -293,10 +307,12 @@ function pinGate(then) {
   const note = h('p', { class: 'note' });
   screen('Координатор', '/',
     h('form', {
-      onsubmit: (e) => {
+      onsubmit: async (e) => {
         e.preventDefault();
-        if (input.value === COORDINATOR_PIN) { coordinatorOk = true; then(); }
-        else note.textContent = 'Неверный код';
+        note.textContent = 'Загрузка…';
+        const res = await store.openCoordinator(input.value);
+        if (res === 'ok') { coordinatorOk = true; then(); }
+        else note.textContent = res === 'pin' ? 'Неверный код' : 'Нет связи с сервером. Попробуйте ещё раз.';
       },
     }, input, h('button', { class: 'btn primary', type: 'submit' }, 'Открыть')),
     note);
@@ -304,10 +320,10 @@ function pinGate(then) {
 
 async function coordinatorScreen() {
   if (!coordinatorOk) return pinGate(coordinatorScreen);
-  const users = await store.listUsers();
-  const events = await store.listEvents();
+  const users = await store.coordUsers();
+  const events = await store.coordEvents();
   const rows = await Promise.all(users.map(async (u) => {
-    const s = await todayStats(u.id);
+    const s = await todayStats(u.id, events);
     const mine = events.filter((e) => e.userId === u.id);
     const last = mine.length ? mine[mine.length - 1].ts : null;
     const days = new Set(mine.map((e) => e.day)).size;
@@ -320,14 +336,15 @@ async function coordinatorScreen() {
   }));
   screen('Пациенты', '/',
     rows.length ? rows : h('p', { class: 'note' }, 'Пока никого нет'),
+    store.sheetUrl() && h('a', { class: 'btn link', href: store.sheetUrl(), target: '_blank', rel: 'noopener' }, 'Открыть Google-таблицу'),
     rows.length > 0 && h('button', { class: 'btn', onclick: () => exportCsv(users, events) }, 'Скачать таблицу (CSV)'));
 }
 
 async function patientScreen(userId) {
   if (!coordinatorOk) return pinGate(() => patientScreen(userId));
-  const user = (await store.listUsers()).find((u) => u.id === userId);
+  const user = (await store.coordUsers()).find((u) => u.id === userId);
   if (!user) return go('/coordinator');
-  const events = (await store.listEvents(userId)).sort((a, b) => b.ts - a.ts);
+  const events = [...await store.coordEvents(userId)].sort((a, b) => b.ts - a.ts);
   const urls = [];
   cleanup = () => urls.forEach((u) => URL.revokeObjectURL(u));
 
@@ -338,6 +355,8 @@ async function patientScreen(userId) {
   }
   const mediaButton = (e) => {
     const isVideo = e.type === 'exercise_video';
+    // файл на Google Диске — открывается в аккаунте координатора
+    if (e.data.url) return h('a', { class: 'btn small link', href: e.data.url, target: '_blank', rel: 'noopener' }, isVideo ? '▶ Смотреть' : '▶ Слушать');
     const holder = h('div');
     const btn = h('button', {
       class: 'btn small',
@@ -379,6 +398,10 @@ function exportCsv(users, events) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
+
+store.setDescriber((e) => ({ text: describe(e), section: refTitle(e) }));
+window.addEventListener('online', () => store.flush());
+store.flush();
 
 window.addEventListener('hashchange', render);
 window.addEventListener('pagehide', leave);

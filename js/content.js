@@ -5,7 +5,8 @@
 //   file: 'media/music/pesnya.mp3'     — файл, лежащий в папке приложения
 // minutes — примерная длительность, показывается на карточке.
 
-export const COORDINATOR_PIN = '2026';
+// Адрес сервера (Google Apps Script). Пустая строка — данные остаются только на устройстве.
+export const API_URL = 'https://script.google.com/macros/s/AKfycbyTxLjkmhCVlGrCRkkcJRky69qp9dNVviNnCfJwPc5sxL3gpf-CgZ0tNZsyt56gY00n/exec';
 
 // Сколько подходов в день считается выполненной нормой
 export const DAILY_GOALS = { exercise: 1, left: 2, music: 3 };
