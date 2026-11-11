@@ -1,8 +1,8 @@
-import { h, fmtMin } from './ui.js?v=4';
-import * as store from './store.js?v=4';
-import { EXERCISES, MUSIC, DAILY_GOALS, COORDINATOR_PIN } from './content.js?v=4';
-import { GAMES } from './games.js?v=4';
-import { createPlayer, startVoiceRecording } from './player.js?v=4';
+import { h, fmtMin } from './ui.js?v=5';
+import * as store from './store.js?v=5';
+import { EXERCISES, MUSIC, DAILY_GOALS, COORDINATOR_PIN } from './content.js?v=5';
+import { GAMES } from './games.js?v=5';
+import { createPlayer, startVoiceRecording } from './player.js?v=5';
 
 const app = document.getElementById('app');
 let cleanup = null; // вызывается при уходе с экрана
@@ -67,7 +67,7 @@ function loginScreen() {
     render();
   };
   app.replaceChildren(h('main', { class: 'login' },
-    h('img', { class: 'logo', src: 'icons/icon-192.png', alt: '' }),
+    h('img', { class: 'logo', src: 'icons/icon-192.png?v=5', alt: '' }),
     h('h1', {}, 'Пробуждение'),
     h('form', { onsubmit: submit },
       input,

@@ -1,5 +1,5 @@
-import { h, shuffle, pick, sample } from './ui.js?v=4';
-import { WORD_SETS } from './words.js?v=4';
+import { h, shuffle, pick, sample } from './ui.js?v=5';
+import { WORD_SETS } from './words.js?v=5';
 
 // Каждая игра: start(root, finish), где finish({ score, total }) вызывается в конце.
 
