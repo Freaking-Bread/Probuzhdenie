@@ -1,6 +1,6 @@
 // Маленький помощник для создания элементов: h('div', {class:'x', onclick: fn}, ...дети)
 export function h(tag, props = {}, ...children) {
-  const svgTags = ['svg', 'line', 'circle', 'rect', 'text', 'g', 'path'];
+  const svgTags = ['svg', 'line', 'circle', 'rect', 'text', 'g', 'path', 'polygon'];
   const el = svgTags.includes(tag)
     ? document.createElementNS('http://www.w3.org/2000/svg', tag)
     : document.createElement(tag);

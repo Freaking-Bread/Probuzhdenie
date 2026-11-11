@@ -1,8 +1,8 @@
-import { h, fmtMin } from './ui.js?v=5';
-import * as store from './store.js?v=5';
-import { EXERCISES, MUSIC, DAILY_GOALS, COORDINATOR_PIN } from './content.js?v=5';
-import { GAMES } from './games.js?v=5';
-import { createPlayer, startVoiceRecording } from './player.js?v=5';
+import { h, fmtMin } from './ui.js?v=6';
+import * as store from './store.js?v=6';
+import { EXERCISES, BRAIN_VIDEOS, MUSIC, DAILY_GOALS, COORDINATOR_PIN } from './content.js?v=6';
+import { GAMES, stopGame } from './games.js?v=6';
+import { createPlayer, startVoiceRecording } from './player.js?v=6';
 
 const app = document.getElementById('app');
 let cleanup = null; // вызывается при уходе с экрана
@@ -48,7 +48,7 @@ async function todayStats(userId) {
   const done = (type) => ev.filter((e) => e.type === type);
   return {
     exerciseDone: new Set(done('exercise_done').map((e) => e.ref)),
-    exercise: done('exercise_done').length,
+    exercise: done('exercise_done').filter((e) => EXERCISES.some((x) => x.id === e.ref)).length,
     left: done('game').length,
     music: done('music_sing').length,
     videos: done('exercise_video').length,
@@ -67,7 +67,7 @@ function loginScreen() {
     render();
   };
   app.replaceChildren(h('main', { class: 'login' },
-    h('img', { class: 'logo', src: 'icons/icon-192.png?v=5', alt: '' }),
+    h('img', { class: 'logo', src: 'icons/icon-192.png?v=6', alt: '' }),
     h('h1', {}, 'Пробуждение'),
     h('form', { onsubmit: submit },
       input,
@@ -110,7 +110,8 @@ async function exercisesScreen() {
 }
 
 function exerciseScreen(id) {
-  const ex = EXERCISES.find((x) => x.id === id);
+  const backTo = BRAIN_VIDEOS.some((x) => x.id === id) ? '/cognitive' : '/exercises';
+  const ex = [...EXERCISES, ...BRAIN_VIDEOS].find((x) => x.id === id);
   if (!ex) return go('/exercises');
   store.log('exercise_open', ex.id);
   const player = createPlayer(ex, 'video');
@@ -147,7 +148,7 @@ function exerciseScreen(id) {
     },
   });
 
-  screen(ex.title, '/exercises',
+  screen(ex.title, backTo,
     player.el,
     doneBtn,
     h('button', { class: 'btn', onclick: () => fileInput.click() }, '🎥 Отправить своё видео'),
@@ -157,12 +158,21 @@ function exerciseScreen(id) {
 
 // ---------- когнитивная стимуляция ----------
 
-function cognitiveScreen() {
+async function cognitiveScreen() {
+  const s = await todayStats(store.currentUser().id);
+  const tiles = (group) => h('div', { class: 'grid2' }, Object.entries(GAMES)
+    .filter(([, g]) => g.group === group)
+    .map(([id, g]) => h('button', { class: 'card tile-card', onclick: () => go('/game/' + id) },
+      h('span', { class: 'emoji' }, g.icon), h('span', {}, g.title))));
   screen('Когнитивная стимуляция', '/',
     h('h2', { class: 'section' }, 'Левое полушарие'),
-    h('div', { class: 'grid2' }, Object.entries(GAMES).map(([id, g]) =>
-      h('button', { class: 'card tile-card', onclick: () => go('/game/' + id) },
-        h('span', { class: 'emoji' }, g.icon), h('span', {}, g.title)))),
+    tiles('left'),
+    h('h2', { class: 'section' }, 'Внимание и память'),
+    tiles('focus'),
+    h('h2', { class: 'section' }, 'Упражнения для мозга'),
+    BRAIN_VIDEOS.map((ex) => h('button', { class: 'card', onclick: () => go('/exercise/' + ex.id) },
+      h('span', { class: 'card-title' }, ex.title),
+      h('span', { class: 'card-sub' }, s.exerciseDone.has(ex.id) ? '✓ выполнено' : `${ex.minutes} мин`))),
     h('h2', { class: 'section' }, 'Правое полушарие'),
     h('button', { class: 'card big', onclick: () => go('/music') },
       h('span', { class: 'emoji' }, '🎵'), h('span', {}, 'Музыка и пение')));
@@ -173,7 +183,9 @@ function gameScreen(id) {
   if (!game) return go('/cognitive');
   const root = h('div', { class: 'game' });
   screen(game.title, '/cognitive', root);
+  cleanup = stopGame;
   const play = () => {
+    stopGame();
     const started = Date.now();
     game.start(root, async (result) => {
       const secs = Math.round((Date.now() - started) / 1000);
@@ -252,7 +264,7 @@ function musicScreen(id, back = '/music') {
 // ---------- координатор ----------
 
 const refTitle = (e) =>
-  (EXERCISES.find((x) => x.id === e.ref) || MUSIC.find((x) => x.id === e.ref) || GAMES[e.ref] || {}).title || e.ref;
+  (EXERCISES.find((x) => x.id === e.ref) || BRAIN_VIDEOS.find((x) => x.id === e.ref) || MUSIC.find((x) => x.id === e.ref) || GAMES[e.ref] || {}).title || e.ref;
 
 function describe(e) {
   const t = refTitle(e);
@@ -262,9 +274,14 @@ function describe(e) {
     case 'exercise_watch': return `Смотрел(а) видео «${t}» — ${fmtMin(d.secs)}`;
     case 'exercise_done': return `Выполнил(а) упражнение «${t}»`;
     case 'exercise_video': return `Прислал(а) видео к упражнению «${t}»`;
-    case 'game': return e.ref === 'words'
-      ? `Задание «${t}»: найдено слов — ${d.score}, ${fmtMin(d.secs)}`
-      : `Задание «${t}»: ${d.score} из ${d.total}, ${fmtMin(d.secs)}`;
+    case 'game': {
+      const extra = d.bestMs ? `, лучший показ ${d.bestMs} мс`
+        : d.bestSecs ? `, лучшее время ${d.bestSecs} с`
+        : d.span ? `, ряд до ${d.span} предметов` : '';
+      return e.ref === 'words'
+        ? `Задание «${t}»: найдено слов — ${d.score}, ${fmtMin(d.secs)}`
+        : `Задание «${t}»: ${d.score} из ${d.total}${extra}, ${fmtMin(d.secs)}`;
+    }
     case 'music_listen': return `Слушал(а) «${t}» — ${fmtMin(d.secs)}`;
     case 'music_sing': return `Пропел(а) «${t}»`;
     default: return e.type;
