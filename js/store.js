@@ -2,7 +2,7 @@
 // Всё сначала записывается на устройстве (чтобы работать и без интернета), а затем
 // отправляется на сервер (Google-таблица + Диск), если в content.js указан API_URL.
 
-import { API_URL } from './content.js?v=9';
+import { API_URL } from './content.js?v=10';
 
 const K_USERS = 'med.users';
 const K_EVENTS = 'med.events';

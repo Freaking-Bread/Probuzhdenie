@@ -281,3 +281,11 @@ audio.media { background: none; min-height: 54px; }
 }
 .event time { color: var(--muted); flex: none; }
 .event > div { flex: 1; min-width: 0; }
+
+/* Найди отличия: две картины и отметки на них */
+.pic { position: relative; border-radius: 14px; overflow: hidden; border: 2px solid var(--line); line-height: 0; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.pic img, .pic canvas { width: 100%; height: auto; display: block; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+.mark { position: absolute; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; box-sizing: border-box; }
+.mark.found { border: 4px solid #2fd16b; box-shadow: 0 0 0 2px rgba(0, 0, 0, .45); }
+.mark.missed { border: 4px dashed #ffb020; box-shadow: 0 0 0 2px rgba(0, 0, 0, .45); }
+.mark.miss { border: 4px solid #ff3b30; background: rgba(255, 59, 48, .35); }

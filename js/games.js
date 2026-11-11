@@ -1,5 +1,6 @@
-import { h, shuffle, pick, sample } from './ui.js?v=9';
-import { WORD_SETS } from './words.js?v=9';
+import { h, shuffle, pick, sample } from './ui.js?v=10';
+import { WORD_SETS } from './words.js?v=10';
+import { DIFFS } from './diffs.js?v=10';
 
 // Каждая игра: start(root, finish), где finish({ score, total, ... }) вызывается в конце.
 // group: 'left' — задания из программы (левое полушарие), 'focus' — внимание, скорость, память.
@@ -135,74 +136,112 @@ function startOdd(root, finish) {
 }
 
 // ---------- Найди отличия ----------
+// Две репродукции картины; на одной из них изменено несколько мест. Каждый раз выбираются
+// другие картины и другой набор отличий. Нажатия мимо считаются и видны координатору.
+
+const loadImage = (src) => new Promise((resolve, reject) => {
+  const img = new Image();
+  img.onload = () => resolve(img);
+  img.onerror = reject;
+  img.src = src;
+});
 
 function startDiff(root, finish) {
-  const rounds = [4, 5, 6].map((nDiffs) => (area, done) => {
-    const N = 25;
-    const base = Array.from({ length: N }, () => pick(ALL_EMOJI));
-    const changed = base.map((e) => ({ e, mod: '' }));
-    const diffCells = new Set(sample([...Array(N).keys()], nDiffs));
-    for (const i of diffCells) {
-      const kind = pick(['replace', 'replace', 'remove', 'flip', 'turn', 'small']);
-      if (kind === 'replace') {
-        // подменяем на предмет из той же категории — так заметить труднее
-        const cat = CATEGORIES.find((c) => c.items.some((it) => it[0] === base[i]));
-        changed[i].e = pick(cat.items.map((it) => it[0]).filter((x) => x !== base[i]));
-      } else if (kind === 'remove') changed[i].e = '';
-      else changed[i].mod = kind;
+  const N_DIFFS = 5;
+  const W = 800;
+  const H = 600;
+  const pictures = sample(DIFFS, 3);
+  let round = 0;
+  let foundTotal = 0;
+  let mistakes = 0;
+
+  const play = async () => {
+    if (round >= pictures.length) return finish({ score: foundTotal, total: pictures.length * N_DIFFS, mistakes });
+    const pic = pictures[round];
+    const spots = sample(pic.spots, N_DIFFS);
+    const counter = h('p', { class: 'counter' }, `${round + 1} из ${pictures.length}`);
+    root.replaceChildren(counter, h('p', { class: 'note' }, 'Загрузка…'));
+    let imgA;
+    let imgB;
+    try {
+      [imgA, imgB] = await Promise.all([loadImage(`media/diff/${pic.id}a.jpg`), loadImage(`media/diff/${pic.id}b.jpg`)]);
+    } catch {
+      root.replaceChildren(h('p', { class: 'note' }, 'Не получилось загрузить картинку. Проверьте интернет.'));
+      return;
     }
+    if (!root.isConnected) return; // пациент уже ушёл с экрана
+
+    const changed = h('canvas', { width: W, height: H });
+    const ctx = changed.getContext('2d');
+    ctx.drawImage(imgA, 0, 0);
+    for (const [x, y, r] of spots) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x * W, y * H, r * W * 0.97, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(imgB, 0, 0);
+      ctx.restore();
+    }
+    imgA.draggable = false;
+
     const found = new Set();
-    let mistakes = 0;
     let over = false;
-    const status = h('p', { class: 'note' }, 'Найдено: 0');
-    const cellsA = [];
-    const cellsB = [];
-    const tap = (i) => {
-      if (over || found.has(i)) return;
-      if (diffCells.has(i)) {
-        found.add(i);
-        cellsA[i].classList.add('found');
-        cellsB[i].classList.add('found');
-        status.textContent = `Найдено: ${found.size}`;
-      } else {
+    const status = h('p', { class: 'note' }, `Найдено: 0 из ${N_DIFFS}`);
+    const panels = [];
+    const mark = (cls, x, y, r, ttl) => panels.forEach((p) => {
+      const m = h('i', { class: 'mark ' + cls, style: { left: x * 100 + '%', top: y * 100 + '%', width: r * 200 + '%' } });
+      p.append(m);
+      if (ttl) later(() => m.remove(), ttl);
+    });
+    const tap = (e) => {
+      if (over) return;
+      const box = e.currentTarget.getBoundingClientRect();
+      const nx = (e.clientX - box.left) / box.width;
+      const ny = (e.clientY - box.top) / box.height;
+      const dist = ([x, y]) => Math.hypot((nx - x) * W, (ny - y) * H);
+      const k = spots.findIndex((s) => dist(s) <= Math.max(s[2] * W * 1.25, 48));
+      if (k === -1) {
         mistakes++;
-        for (const c of [cellsA[i], cellsB[i]]) {
-          c.classList.add('miss');
-          later(() => c.classList.remove('miss'), 500);
-        }
+        mark('miss', nx, ny, 0.035, 600);
+      } else if (!found.has(k)) {
+        found.add(k);
+        mark('found', spots[k][0], spots[k][1], spots[k][2]);
+        status.textContent = `Найдено: ${found.size} из ${N_DIFFS}`;
+        if (found.size === N_DIFFS) end(false);
       }
     };
-    const panel = (cells, data) => h('div', { class: 'scene' }, data.map((d, i) => {
-      const c = h('button', { class: 'cell ' + d.mod, onclick: () => tap(i) }, h('span', {}, d.e));
-      cells.push(c);
-      return c;
-    }));
-    const next = h('button', { class: 'btn primary', hidden: true, onclick: () => done(found.size === nDiffs && mistakes <= 2) }, 'Дальше');
+    const panel = (pictureEl) => {
+      const p = h('div', { class: 'pic', onclick: tap }, pictureEl);
+      panels.push(p);
+      return p;
+    };
+    const next = h('button', { class: 'btn primary', hidden: true, onclick: () => { round++; play(); } }, 'Дальше');
     const end = (timeout) => {
       if (over) return;
       over = true;
       bar.stop();
-      check.hidden = true;
+      giveUp.hidden = true;
       next.hidden = false;
-      for (const i of diffCells) {
-        if (!found.has(i)) { cellsA[i].classList.add('missed'); cellsB[i].classList.add('missed'); }
-      }
-      status.textContent = (timeout ? 'Время вышло. ' : '') + (found.size === nDiffs
-        ? `Верно! Отличий было ${nDiffs}, вы нашли все.`
-        : `Отличий было ${nDiffs}, вы нашли ${found.size}. Остальные обведены.`);
+      foundTotal += found.size;
+      spots.forEach((s, k) => { if (!found.has(k)) mark('missed', s[0], s[1], s[2]); });
+      status.textContent = found.size === N_DIFFS
+        ? 'Верно! Вы нашли все отличия.'
+        : `${timeout ? 'Время вышло. ' : ''}Вы нашли ${found.size} из ${N_DIFFS}. Остальные обведены.`;
+      next.scrollIntoView({ block: 'nearest' });
     };
-    const check = h('button', { class: 'btn', onclick: () => end(false) }, 'Больше отличий нет');
-    const bar = timeBar(90, () => end(true));
-    area.replaceChildren(
+    const giveUp = h('button', { class: 'btn', onclick: () => end(false) }, 'Показать ответ');
+    const bar = timeBar(120, () => end(true));
+    const pair = [panel(imgA), panel(changed)];
+    if (Math.random() < 0.5) pair.reverse();
+    root.replaceChildren(
+      counter,
       bar.el,
-      h('h2', { class: 'prompt' }, 'Найдите все отличия и нажмите на них'),
-      h('div', { class: 'scenes' },
-        panel(cellsA, base.map((e) => ({ e, mod: '' }))),
-        panel(cellsB, changed)),
-      status, check, next,
+      h('h2', { class: 'prompt' }, 'Найдите отличия и нажмите на них'),
+      h('div', { class: 'scenes' }, pair),
+      status, giveUp, next,
     );
-  });
-  runRounds(root, rounds, finish);
+  };
+  play();
 }
 
 // ---------- Пространственные задания ----------
@@ -559,12 +598,15 @@ function startOrder(root, finish) {
 }
 
 // ---------- Двойное внимание (скорость и поле зрения) ----------
-// На мгновение показывается машина в центре и звезда на краю. Нужно заметить и то, и другое.
+// На мгновение показывается машина в центре и звезда на краю — среди похожих значков.
+// Нужно заметить и то, и другое.
 // После верных ответов время показа сокращается.
 
 function startDual(root, finish) {
   const ROUNDS = 12;
   const CARS = [['🚗', 'Легковая'], ['🚌', 'Автобус']];
+  // жёлтые и оранжевые значки, чтобы звезда не выделялась цветом
+  const DECOYS = ['🌙', '☀️', '🌼', '🔶', '🟡', '⚡', '🔔', '🍋', '🌻', '🟨'];
   let ms = 1500;
   let best = ms;
   let i = 0;
@@ -579,7 +621,8 @@ function startDual(root, finish) {
     if (i >= ROUNDS) return finish({ score, total: ROUNDS, bestMs: best });
     const car = pick(CARS);
     const starAt = Math.floor(Math.random() * 8);
-    const withDistractors = i >= 3;
+    // сначала заняты не все места, с третьего раза — все восемь
+    const decoyAt = new Set(sample([...Array(8).keys()].filter((k) => k !== starAt), i < 2 ? 4 : 7));
     const arena = h('div', { class: 'arena' }, h('span', { class: 'arena-item center' }, '+'));
     const head = h('p', { class: 'counter' }, `${i + 1} из ${ROUNDS}`);
     const prompt = h('h2', { class: 'prompt' }, 'Смотрите в центр');
@@ -590,7 +633,7 @@ function startDual(root, finish) {
         h('span', { class: 'arena-item center' }, car[0]),
         ...[...Array(8).keys()].map((k) => (k === starAt
           ? h('span', { class: 'arena-item', style: spot(k) }, '⭐')
-          : withDistractors && h('span', { class: 'arena-item', style: spot(k) }, '🔶'))).filter(Boolean));
+          : decoyAt.has(k) && h('span', { class: 'arena-item', style: spot(k) }, pick(DECOYS)))).filter(Boolean));
       later(mask, ms);
     };
     const mask = () => {

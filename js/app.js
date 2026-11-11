@@ -1,8 +1,8 @@
-import { h, fmtMin } from './ui.js?v=9';
-import * as store from './store.js?v=9';
-import { EXERCISES, BRAIN_VIDEOS, MUSIC, DAILY_GOALS } from './content.js?v=9';
-import { GAMES, stopGame } from './games.js?v=9';
-import { createPlayer, startVoiceRecording } from './player.js?v=9';
+import { h, fmtMin } from './ui.js?v=10';
+import * as store from './store.js?v=10';
+import { EXERCISES, BRAIN_VIDEOS, MUSIC, DAILY_GOALS } from './content.js?v=10';
+import { GAMES, stopGame } from './games.js?v=10';
+import { createPlayer, startVoiceRecording } from './player.js?v=10';
 
 const app = document.getElementById('app');
 let cleanup = null; // вызывается при уходе с экрана
@@ -67,7 +67,7 @@ function loginScreen() {
     render();
   };
   app.replaceChildren(h('main', { class: 'login' },
-    h('img', { class: 'logo', src: 'icons/icon-192.png?v=9', alt: '' }),
+    h('img', { class: 'logo', src: 'icons/icon-192.png?v=10', alt: '' }),
     h('h1', {}, 'Пробуждение'),
     h('form', { onsubmit: submit },
       input,
@@ -291,7 +291,8 @@ function describe(e) {
     case 'game': {
       const extra = d.bestMs ? `, лучший показ ${d.bestMs} мс`
         : d.bestSecs ? `, лучшее время ${d.bestSecs} с`
-        : d.span ? `, ряд до ${d.span} предметов` : '';
+        : d.span ? `, ряд до ${d.span} предметов`
+        : d.mistakes != null ? `, нажатий мимо: ${d.mistakes}` : '';
       return e.ref === 'words'
         ? `Задание «${t}»: найдено слов — ${d.score}, ${fmtMin(d.secs)}`
         : `Задание «${t}»: ${d.score} из ${d.total}${extra}, ${fmtMin(d.secs)}`;

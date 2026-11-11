@@ -1,4 +1,4 @@
-import { h } from './ui.js?v=9';
+import { h } from './ui.js?v=10';
 
 // Плеер для файла или YouTube. Считает, сколько секунд реально проигрывалось.
 // Возвращает { el, seconds(), stop() }.
