@@ -2,7 +2,7 @@
 // Всё сначала записывается на устройстве (чтобы работать и без интернета), а затем
 // отправляется на сервер (Google-таблица + Диск), если в content.js указан API_URL.
 
-import { API_URL } from './content.js?v=10';
+import { API_URL } from './content.js?v=11';
 
 const K_USERS = 'med.users';
 const K_EVENTS = 'med.events';
@@ -20,6 +20,8 @@ export const dayKey = (ts = Date.now()) => {
 };
 
 const normName = (s) => s.trim().replace(/\s+/g, ' ');
+// Пациент узнаётся по имени и отчеству: это и есть его номер.
+const userId = (name) => normName(name).toLowerCase().replace(/ё/g, 'е');
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
 async function api(req) {
@@ -32,6 +34,24 @@ async function api(req) {
 
 // ---------- пациент ----------
 
+// В первых версиях у пациента был случайный номер. Переводим такие записи на номер по имени,
+// иначе один и тот же человек виден координатору дважды.
+(function migrate() {
+  const users = read(K_USERS, []);
+  const map = {};
+  users.forEach((u) => { if (u.id !== userId(u.name)) map[u.id] = userId(u.name); });
+  if (!Object.keys(map).length) return;
+  const byId = {};
+  users.forEach((u) => {
+    const id = map[u.id] || u.id;
+    if (!byId[id] || u.created < byId[id].created) byId[id] = { ...u, id };
+  });
+  write(K_USERS, Object.values(byId));
+  write(K_EVENTS, read(K_EVENTS, []).map((e) => (map[e.userId] ? { ...e, userId: map[e.userId] } : e)));
+  const cur = localStorage.getItem(K_CURRENT);
+  if (map[cur]) localStorage.setItem(K_CURRENT, map[cur]);
+})();
+
 export function currentUser() {
   const id = localStorage.getItem(K_CURRENT);
   return read(K_USERS, []).find((u) => u.id === id) || null;
@@ -40,7 +60,7 @@ export function currentUser() {
 // Пациент узнаётся по имени и отчеству, поэтому на любом телефоне это один и тот же человек.
 export async function login(rawName) {
   const name = normName(rawName);
-  const id = name.toLowerCase().replace(/ё/g, 'е');
+    const id = userId(name);
   const users = read(K_USERS, []);
   let user = users.find((u) => u.id === id);
   if (!user) {
@@ -177,9 +197,18 @@ export async function openCoordinator(pin) {
   if (!API_URL) { remote = null; return 'ok'; } // режим разработки без сервера
   try {
     const out = await api({ action: 'coordinator', pin });
+    // записи одного человека под разными номерами (из старых версий) объединяем по имени
+    const canon = {};
+    const users = {};
+    out.users.forEach((u) => {
+      const id = userId(u.name);
+      canon[u.id] = id;
+      if (!users[id] || u.created < users[id].created) users[id] = { ...u, id };
+    });
     remote = {
       ...out,
-      events: out.events.map((e) => ({ ...e, ref: e.data && e.data.ref })),
+      users: Object.values(users),
+      events: out.events.map((e) => ({ ...e, userId: canon[e.userId] || e.userId, ref: e.data && e.data.ref })),
     };
     return 'ok';
   } catch (e) {

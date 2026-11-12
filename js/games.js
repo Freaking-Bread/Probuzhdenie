@@ -1,6 +1,6 @@
-import { h, shuffle, pick, sample } from './ui.js?v=10';
-import { WORD_SETS } from './words.js?v=10';
-import { DIFFS } from './diffs.js?v=10';
+import { h, shuffle, pick, sample } from './ui.js?v=11';
+import { WORD_SETS } from './words.js?v=11';
+import { DIFFS } from './diffs.js?v=11';
 
 // Каждая игра: start(root, finish), где finish({ score, total, ... }) вызывается в конце.
 // group: 'left' — задания из программы (левое полушарие), 'focus' — внимание, скорость, память.
@@ -32,6 +32,18 @@ function timeBar(secs, onTimeout) {
   const el = h('div', { class: 'timebar' }, fill);
   const id = later(onTimeout, secs * 1000);
   return { el, stop() { cancel(id); fill.style.animationPlayState = 'paused'; } };
+}
+
+// Выбирает n заданий из набора так, чтобы они не повторялись, пока пациент не пройдёт весь набор.
+function fresh(key, ids, n) {
+  const k = `med.seen.${key}.${localStorage.getItem('med.current') || ''}`;
+  let seen = [];
+  try { seen = JSON.parse(localStorage.getItem(k)) || []; } catch { /* начнём заново */ }
+  let pool = ids.filter((id) => !seen.includes(id));
+  if (pool.length < n) { seen = []; pool = ids; }
+  const out = sample(pool, n);
+  try { localStorage.setItem(k, JSON.stringify([...seen, ...out])); } catch { /* не страшно */ }
+  return out;
 }
 
 // ---------- данные ----------
@@ -150,7 +162,7 @@ function startDiff(root, finish) {
   const N_DIFFS = 5;
   const W = 800;
   const H = 600;
-  const pictures = sample(DIFFS, 3);
+  const pictures = fresh('diff', DIFFS.map((d) => d.id), 3).map((id) => DIFFS.find((d) => d.id === id));
   let round = 0;
   let foundTotal = 0;
   let mistakes = 0;
@@ -432,7 +444,7 @@ function patternRound() {
 
 function startWords(root, finish) {
   const GOAL = 6;
-  const base = pick(Object.keys(WORD_SETS));
+  const base = fresh('words', Object.keys(WORD_SETS), 1)[0];
   const valid = new Set(WORD_SETS[base]);
   const found = [];
   let current = []; // индексы выбранных плиток

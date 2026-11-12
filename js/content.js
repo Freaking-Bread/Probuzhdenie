@@ -27,5 +27,6 @@ export const BRAIN_VIDEOS = [
 ];
 
 export const MUSIC = [
-  { id: 'm1', title: 'Пример мелодии', file: 'media/music/primer.wav' },
+  { id: 'kolybelnaya', title: 'Колыбельная (Моцарт)', file: 'media/music/kolybelnaya.mp3' },
+  { id: 'serenada', title: 'Маленькая ночная серенада (Моцарт)', file: 'media/music/serenada.mp3' },
 ];
